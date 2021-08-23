@@ -209,6 +209,16 @@ struct VirtIONet {
     Notifier migration_state;
     VirtioNetRssData rss_data;
     struct NetRxPkt *rx_pkt;
+
+    /* AVIV */
+#define VIRTIO_IMPROV_FLAG_ENABLE_NOTIFY_BATCH_BIT 5    
+#define VIRTIO_IMPROV_FLAG_ENABLE_DROP_PACKET_BIT 6
+#define VIRTIO_IMPROV_FLAG_ENABLE_DROP_PACKET (1 << VIRTIO_IMPROV_FLAG_ENABLE_DROP_PACKET_BIT)
+#define VIRTIO_IMPROV_FLAG_ENABLE_NOTIFY_BATCH (1 << VIRTIO_IMPROV_FLAG_ENABLE_NOTIFY_BATCH_BIT)
+    uint32_t improve_flags;
+
+    size_t drop_packets_sent;
+    size_t drop_bytes_sent;
 };
 
 void virtio_net_set_netclient_name(VirtIONet *n, const char *name,

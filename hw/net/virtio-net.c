@@ -56,7 +56,8 @@
 
 /* for now, only allow larger queues; with virtio-1, guest can downsize */
 #define VIRTIO_NET_RX_QUEUE_MIN_SIZE VIRTIO_NET_RX_QUEUE_DEFAULT_SIZE
-#define VIRTIO_NET_TX_QUEUE_MIN_SIZE VIRTIO_NET_TX_QUEUE_DEFAULT_SIZE
+// #define VIRTIO_NET_TX_QUEUE_MIN_SIZE VIRTIO_NET_TX_QUEUE_DEFAULT_SIZE
+#define VIRTIO_NET_TX_QUEUE_MIN_SIZE 16 //VIRTIO_NET_TX_QUEUE_DEFAULT_SIZE
 
 #define VIRTIO_NET_IP4_ADDR_SIZE   8        /* ipv4 saddr + daddr */
 
@@ -1423,6 +1424,24 @@ static bool virtio_net_can_receive(NetClientState *nc)
     return true;
 }
 
+static void virtio_net_receive_batch_finished(NetClientState *nc, int packets){
+    VirtIONet *n = qemu_get_nic_opaque(nc);
+    VirtIODevice *vdev = VIRTIO_DEVICE(n);
+    VirtIONetQueue *q = virtio_net_get_subqueue(nc);
+
+    if (!(n->improve_flags & VIRTIO_IMPROV_FLAG_ENABLE_NOTIFY_BATCH)){
+        return;
+    }
+
+    if (!packets){
+        return;
+    }
+
+    rcu_read_lock();
+    virtio_notify(vdev, q->rx_vq);
+    rcu_read_unlock();
+}
+
 static int virtio_net_has_buffers(VirtIONetQueue *q, int bufsize)
 {
     VirtIONet *n = q->n;
@@ -1765,7 +1784,12 @@ static ssize_t virtio_net_receive_rcu(NetClientState *nc, const uint8_t *buf,
     }
 
     virtqueue_flush(q->rx_vq, i);
-    virtio_notify(vdev, q->rx_vq);
+
+    // virtio_notify(vdev, q->rx_vq);
+
+    if (!(n->improve_flags & VIRTIO_IMPROV_FLAG_ENABLE_NOTIFY_BATCH)){
+        virtio_notify(vdev, q->rx_vq);
+    }
 
     return size;
 }
@@ -2400,6 +2424,34 @@ static void virtio_net_tx_complete(NetClientState *nc, ssize_t len)
     virtio_net_flush_tx(q);
 }
 
+static bool is_drop_packet(VirtIONet *n, uint16_t packet_size) {
+#define VIRTIO_DROP_EVERY   8000
+#define VIRTIO_DROP_MIN     9000
+#define VIRTIO_DROP_MAX     62000
+
+    size_t avg_packet_size;
+    if (!(n->improve_flags & VIRTIO_IMPROV_FLAG_ENABLE_DROP_PACKET)){
+        return false;
+    }
+
+    n->drop_packets_sent++;
+    n->drop_bytes_sent += packet_size;
+
+    if (n->drop_packets_sent < VIRTIO_DROP_EVERY){
+        return false;
+    }
+
+    avg_packet_size = n->drop_bytes_sent / VIRTIO_DROP_EVERY;
+    n->drop_packets_sent = 0;
+    n->drop_bytes_sent = 0;
+
+    if (avg_packet_size > VIRTIO_DROP_MIN && avg_packet_size < VIRTIO_DROP_MAX){
+        return true;
+    }
+
+    return false;
+}
+
 /* TX */
 static int32_t virtio_net_flush_tx(VirtIONetQueue *q)
 {
@@ -2474,6 +2526,12 @@ static int32_t virtio_net_flush_tx(VirtIONetQueue *q)
                              n->guest_hdr_len, -1);
             out_num = sg_num;
             out_sg = sg;
+        }
+
+        /* drop packets */
+        if (n->improve_flags & VIRTIO_IMPROV_FLAG_ENABLE_DROP_PACKET &&
+            is_drop_packet(n, iov_size(out_sg, out_num))){
+            goto drop;
         }
 
         ret = qemu_sendv_packet_async(qemu_get_subqueue(n->nic, queue_index),
@@ -3042,6 +3100,7 @@ static NetClientInfo net_virtio_info = {
     .size = sizeof(NICState),
     .can_receive = virtio_net_can_receive,
     .receive = virtio_net_receive,
+    .receive_batch_finished = virtio_net_receive_batch_finished,
     .link_status_changed = virtio_net_set_link_status,
     .query_rx_filter = virtio_net_query_rxfilter,
     .announce = virtio_net_announce,
@@ -3513,6 +3572,12 @@ static Property virtio_net_properties[] = {
     DEFINE_PROP_INT32("speed", VirtIONet, net_conf.speed, SPEED_UNKNOWN),
     DEFINE_PROP_STRING("duplex", VirtIONet, net_conf.duplex_str),
     DEFINE_PROP_BOOL("failover", VirtIONet, failover, false),
+
+    DEFINE_PROP_BIT("NG_notify_batch", VirtIONet, improve_flags, 
+                    VIRTIO_IMPROV_FLAG_ENABLE_NOTIFY_BATCH_BIT, false),
+    DEFINE_PROP_BIT("NG_drop_packet", VirtIONet, improve_flags, 
+                    VIRTIO_IMPROV_FLAG_ENABLE_DROP_PACKET_BIT, false),
+
     DEFINE_PROP_END_OF_LIST(),
 };
 

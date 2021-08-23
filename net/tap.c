@@ -228,6 +228,10 @@ static void tap_send(void *opaque)
         if (packets >= 50) {
             break;
         }
+
+        if (s->nc.peer->info->receive_batch_finished){
+            s->nc.peer->info->receive_batch_finished(s->nc.peer, packets);
+        }
     }
 }
 
