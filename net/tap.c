@@ -230,7 +230,12 @@ static void tap_send(void *opaque)
         }
     }
 
-    if (s->nc.peer->info->receive_batch_finished){
+    /* 
+     * when the batching bit is enabled, this callback will be present,
+     * and will activate the virtio_notify logic, after all the packets
+     * are written to virtio's buffers
+     */
+    if (s->nc.peer->info->receive_batch_finished) {
         s->nc.peer->info->receive_batch_finished(s->nc.peer, packets);
     }
 }
