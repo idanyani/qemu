@@ -4406,6 +4406,15 @@ SRST
     user-provided config files on sysconfdir.
 ERST
 
+DEF("virtio-interrupt-batching", 0, QEMU_OPTION_virtio_interrupt_batching,
+    "-virtio-interrupt-batching\n"
+    "                use interrupt batching in virtio-net NIC's\n",
+    QEMU_ARCH_ALL)
+SRST
+``-virtio-interrupt-batching``
+    The ``-virtio-interrupt-batching`` option makes QEMU use interrupt batching in virtio-net NIC's
+ERST
+
 DEF("trace", HAS_ARG, QEMU_OPTION_trace,
     "-trace [[enable=]<pattern>][,events=<file>][,file=<file>]\n"
     "                specify tracing options\n",

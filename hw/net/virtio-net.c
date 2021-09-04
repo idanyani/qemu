@@ -80,6 +80,8 @@
    tso/gso/gro 'off'. */
 #define VIRTIO_NET_RSC_DEFAULT_INTERVAL 300000
 
+bool virtio_interrupt_batching_enabled = false;
+
 #define VIRTIO_NET_RSS_SUPPORTED_HASHES (VIRTIO_NET_RSS_HASH_TYPE_IPv4 | \
                                          VIRTIO_NET_RSS_HASH_TYPE_TCPv4 | \
                                          VIRTIO_NET_RSS_HASH_TYPE_UDPv4 | \
@@ -1430,7 +1432,7 @@ static void virtio_net_receive_batch_finished(NetClientState *nc, int packets){
     VirtIONetQueue *q = virtio_net_get_subqueue(nc);
 
     /* only NIC's with the batch notification bit enabled are relevant */
-    if (!(n->improve_flags & VIRTIO_IMPROV_FLAG_ENABLE_NOTIFY_BATCH)) {
+    if (!virtio_interrupt_batching_enabled) {
         return;
     }
 
@@ -1788,7 +1790,7 @@ static ssize_t virtio_net_receive_rcu(NetClientState *nc, const uint8_t *buf,
     virtqueue_flush(q->rx_vq, i);
 
     /* only notify if the batching flag isn't on */
-    if (!(n->improve_flags & VIRTIO_IMPROV_FLAG_ENABLE_NOTIFY_BATCH)) {
+    if (!virtio_interrupt_batching_enabled) {
         virtio_notify(vdev, q->rx_vq);
     }
 
@@ -3539,9 +3541,6 @@ static Property virtio_net_properties[] = {
     DEFINE_PROP_INT32("speed", VirtIONet, net_conf.speed, SPEED_UNKNOWN),
     DEFINE_PROP_STRING("duplex", VirtIONet, net_conf.duplex_str),
     DEFINE_PROP_BOOL("failover", VirtIONet, failover, false),
-
-    DEFINE_PROP_BIT("NG_notify_batch", VirtIONet, improve_flags, 
-                    VIRTIO_IMPROV_FLAG_ENABLE_NOTIFY_BATCH_BIT, false),
 
     DEFINE_PROP_END_OF_LIST(),
 };

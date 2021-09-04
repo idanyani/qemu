@@ -498,6 +498,8 @@ static QemuOptsList qemu_action_opts = {
     },
 };
 
+extern bool virtio_interrupt_batching_enabled;
+
 /**
  * Get machine options
  *
@@ -3494,6 +3496,9 @@ void qemu_init(int argc, char **argv, char **envp)
                 break;
             case QEMU_OPTION_nouserconfig:
                 /* Nothing to be parsed here. Especially, do not error out below. */
+                break;
+            case QEMU_OPTION_virtio_interrupt_batching:
+                virtio_interrupt_batching_enabled = true;
                 break;
             default:
                 if (os_parse_cmd_args(popt->index, optarg)) {
