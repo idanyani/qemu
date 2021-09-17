@@ -4415,6 +4415,15 @@ SRST
     The ``-virtio-interrupt-batching`` option makes QEMU use interrupt batching in virtio-net NIC's
 ERST
 
+DEF("virtio-tx-interrupt-batching", 0, QEMU_OPTION_virtio_tx_interrupt_batching,
+    "-virtio-tx-interrupt-batching\n"
+    "                use interrupt TX batching in virtio-net NIC's\n",
+    QEMU_ARCH_ALL)
+SRST
+``-virtio-tx-interrupt-batching``
+    The ``-virtio-tx-interrupt-batching`` option makes QEMU use TX interrupt batching in virtio-net NIC's
+ERST
+
 DEF("trace", HAS_ARG, QEMU_OPTION_trace,
     "-trace [[enable=]<pattern>][,events=<file>][,file=<file>]\n"
     "                specify tracing options\n",

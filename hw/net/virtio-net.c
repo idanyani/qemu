@@ -81,6 +81,7 @@
 #define VIRTIO_NET_RSC_DEFAULT_INTERVAL 300000
 
 bool virtio_interrupt_batching_enabled = false;
+bool virtio_tx_interrupt_batching_enabled = false;
 
 #define VIRTIO_NET_RSS_SUPPORTED_HASHES (VIRTIO_NET_RSS_HASH_TYPE_IPv4 | \
                                          VIRTIO_NET_RSS_HASH_TYPE_TCPv4 | \
@@ -2418,7 +2419,10 @@ static void virtio_net_tx_complete(NetClientState *nc, ssize_t len)
     VirtIODevice *vdev = VIRTIO_DEVICE(n);
 
     virtqueue_push(q->tx_vq, q->async_tx.elem, 0);
-    virtio_notify(vdev, q->tx_vq);
+
+    if (!virtio_tx_interrupt_batching_enabled) {
+        virtio_notify(vdev, q->tx_vq);
+    }
 
     g_free(q->async_tx.elem);
     q->async_tx.elem = NULL;
@@ -2520,6 +2524,11 @@ drop:
             break;
         }
     }
+
+    if (num_packets > 0 && virtio_tx_interrupt_batching_enabled) {
+        virtio_notify(vdev, q->tx_vq);
+    }
+
     return num_packets;
 }
 
