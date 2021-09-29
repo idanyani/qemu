@@ -83,6 +83,21 @@
 #define VIRTIO_NET_RSS_HASH_TYPE_TCP_EX        (1 << 7)
 #define VIRTIO_NET_RSS_HASH_TYPE_UDP_EX        (1 << 8)
 
+struct virtio_debug_stats_rx {
+	uint64_t batches;
+	uint64_t packets;
+} __attribute__((packed));
+
+struct virtio_debug_stats_tx {
+	uint64_t batches;
+	uint64_t packets;
+} __attribute__((packed));
+
+struct virtio_debug_stats {
+	struct virtio_debug_stats_rx rx_stats;
+	struct virtio_debug_stats_tx tx_stats;
+} __attribute__((packed));
+
 struct virtio_net_config {
 	/* The config defining mac address (if VIRTIO_NET_F_MAC) */
 	uint8_t mac[ETH_ALEN];
@@ -112,6 +127,8 @@ struct virtio_net_config {
 	uint16_t rss_max_indirection_table_length;
 	/* bitmask of supported VIRTIO_NET_RSS_HASH_ types */
 	uint32_t supported_hash_types;
+
+	struct virtio_debug_stats debug_stats;
 } QEMU_PACKED;
 
 /*

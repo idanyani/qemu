@@ -146,6 +146,9 @@ static void virtio_net_get_config(VirtIODevice *vdev, uint8_t *config)
                  VIRTIO_NET_RSS_MAX_TABLE_LEN : 1);
     virtio_stl_p(vdev, &netcfg.supported_hash_types,
                  VIRTIO_NET_RSS_SUPPORTED_HASHES);
+    
+    netcfg.debug_stats = n->debug_stats;
+
     memcpy(config, &netcfg, n->config_size);
 
     /*
@@ -1427,18 +1430,21 @@ static bool virtio_net_can_receive(NetClientState *nc)
     return true;
 }
 
-static void virtio_net_receive_batch_finished(NetClientState *nc, int packets){
+static void virtio_net_receive_batch_finished(NetClientState *nc, int packets) {
     VirtIONet *n = qemu_get_nic_opaque(nc);
     VirtIODevice *vdev = VIRTIO_DEVICE(n);
     VirtIONetQueue *q = virtio_net_get_subqueue(nc);
 
-    /* only NIC's with the batch notification bit enabled are relevant */
-    if (!virtio_interrupt_batching_enabled) {
+    /* nothing to do when there are no packets */
+    if (packets <= 0) {
         return;
     }
 
-    /* nothing to do when there are no packets */
-    if (!packets) {
+    n->debug_stats.rx_stats.batches += 1;
+    n->debug_stats.rx_stats.packets += packets;
+
+    /* only NIC's with the batch notification bit enabled are relevant */
+    if (!virtio_interrupt_batching_enabled) {
         return;
     }
 
@@ -2525,8 +2531,13 @@ drop:
         }
     }
 
-    if (num_packets > 0 && virtio_tx_interrupt_batching_enabled) {
-        virtio_notify(vdev, q->tx_vq);
+    if (num_packets > 0) {
+        n->debug_stats.tx_stats.batches += 1;
+        n->debug_stats.tx_stats.packets += num_packets;
+
+        if (virtio_tx_interrupt_batching_enabled) {
+            virtio_notify(vdev, q->tx_vq);
+        }
     }
 
     return num_packets;
@@ -3108,6 +3119,7 @@ static void virtio_net_set_config_size(VirtIONet *n, uint64_t host_features)
 
     n->config_size = virtio_feature_get_config_size(feature_sizes,
                                                     host_features);
+    n->config_size = sizeof(struct virtio_net_config);
 }
 
 void virtio_net_set_netclient_name(VirtIONet *n, const char *name,

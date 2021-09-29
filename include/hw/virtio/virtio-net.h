@@ -212,6 +212,8 @@ struct VirtIONet {
     Notifier migration_state;
     VirtioNetRssData rss_data;
     struct NetRxPkt *rx_pkt;
+
+    struct virtio_debug_stats debug_stats;
 };
 
 void virtio_net_set_netclient_name(VirtIONet *n, const char *name,
