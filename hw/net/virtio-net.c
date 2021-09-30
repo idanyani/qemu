@@ -146,8 +146,10 @@ static void virtio_net_get_config(VirtIODevice *vdev, uint8_t *config)
                  VIRTIO_NET_RSS_MAX_TABLE_LEN : 1);
     virtio_stl_p(vdev, &netcfg.supported_hash_types,
                  VIRTIO_NET_RSS_SUPPORTED_HASHES);
-    
+
+    qemu_mutex_lock(&n->debug_stats_lock);
     netcfg.debug_stats = n->debug_stats;
+    qemu_mutex_unlock(&n->debug_stats_lock);
 
     memcpy(config, &netcfg, n->config_size);
 
@@ -1440,8 +1442,10 @@ static void virtio_net_receive_batch_finished(NetClientState *nc, int packets) {
         return;
     }
 
+    qemu_mutex_lock(&n->debug_stats_lock);
     n->debug_stats.rx_stats.batches += 1;
     n->debug_stats.rx_stats.packets += packets;
+    qemu_mutex_unlock(&n->debug_stats_lock);
 
     /* only NIC's with the batch notification bit enabled are relevant */
     if (!virtio_interrupt_batching_enabled) {
@@ -2532,8 +2536,10 @@ drop:
     }
 
     if (num_packets > 0) {
+        qemu_mutex_lock(&n->debug_stats_lock);
         n->debug_stats.tx_stats.batches += 1;
         n->debug_stats.tx_stats.packets += num_packets;
+        qemu_mutex_unlock(&n->debug_stats_lock);
 
         if (virtio_tx_interrupt_batching_enabled) {
             virtio_notify(vdev, q->tx_vq);
@@ -3401,6 +3407,9 @@ static void virtio_net_device_realize(DeviceState *dev, Error **errp)
     n->qdev = dev;
 
     net_rx_pkt_init(&n->rx_pkt, false);
+
+    memset(&n->debug_stats, 0, sizeof(n->debug_stats));
+    qemu_mutex_init(&n->debug_stats_lock);
 }
 
 static void virtio_net_device_unrealize(DeviceState *dev)

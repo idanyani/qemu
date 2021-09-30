@@ -214,6 +214,7 @@ struct VirtIONet {
     struct NetRxPkt *rx_pkt;
 
     struct virtio_debug_stats debug_stats;
+    QemuMutex                 debug_stats_lock;
 };
 
 void virtio_net_set_netclient_name(VirtIONet *n, const char *name,
