@@ -156,11 +156,11 @@ static void virtio_net_get_config(VirtIODevice *vdev, uint8_t *config)
         int fd = (uintptr_t)vhost_net_state->dev.opaque;
         ioctl(fd, VHOST_GET_DEBUG_STATS, &netcfg.debug_stats);
     } else {
-    qemu_mutex_lock(&n->debug_stats_lock);
-    netcfg.debug_stats = n->debug_stats;
-    qemu_mutex_unlock(&n->debug_stats_lock);
+        qemu_mutex_lock(&n->debug_stats_lock);
+        netcfg.debug_stats = n->debug_stats;
+        qemu_mutex_unlock(&n->debug_stats_lock);
     }
-
+   
     memcpy(config, &netcfg, n->config_size);
 
     /*
@@ -1455,6 +1455,9 @@ static void virtio_net_receive_batch_finished(NetClientState *nc, int packets) {
     qemu_mutex_lock(&n->debug_stats_lock);
     n->debug_stats.rx_stats.batches += 1;
     n->debug_stats.rx_stats.packets += packets;
+    if (virtio_interrupt_batching_enabled) {
+        n->debug_stats.rx_stats.signals += 1;
+    }
     qemu_mutex_unlock(&n->debug_stats_lock);
 
     /* only NIC's with the batch notification bit enabled are relevant */
@@ -1812,6 +1815,10 @@ static ssize_t virtio_net_receive_rcu(NetClientState *nc, const uint8_t *buf,
 
     /* only notify if the batching flag isn't on */
     if (!virtio_interrupt_batching_enabled) {
+        qemu_mutex_lock(&n->debug_stats_lock);
+        n->debug_stats.rx_stats.signals += 1;
+        qemu_mutex_unlock(&n->debug_stats_lock);
+
         virtio_notify(vdev, q->rx_vq);
     }
 
@@ -2440,9 +2447,10 @@ static void virtio_net_tx_complete(NetClientState *nc, ssize_t len)
 
     virtqueue_push(q->tx_vq, q->async_tx.elem, 0);
 
-    if (!virtio_tx_interrupt_batching_enabled) {
-        virtio_notify(vdev, q->tx_vq);
-    }
+    qemu_mutex_lock(&n->debug_stats_lock);
+    n->debug_stats.tx_stats.signals += 1;
+    qemu_mutex_unlock(&n->debug_stats_lock);
+    virtio_notify(vdev, q->tx_vq);
 
     g_free(q->async_tx.elem);
     q->async_tx.elem = NULL;
@@ -2537,7 +2545,14 @@ static int32_t virtio_net_flush_tx(VirtIONetQueue *q)
 
 drop:
         virtqueue_push(q->tx_vq, elem, 0);
-        virtio_notify(vdev, q->tx_vq);
+
+        if (!virtio_tx_interrupt_batching_enabled) {
+            qemu_mutex_lock(&n->debug_stats_lock);
+            n->debug_stats.tx_stats.signals += 1;
+            qemu_mutex_unlock(&n->debug_stats_lock);
+            virtio_notify(vdev, q->tx_vq);
+        }
+
         g_free(elem);
 
         if (++num_packets >= n->tx_burst) {
@@ -2549,6 +2564,9 @@ drop:
         qemu_mutex_lock(&n->debug_stats_lock);
         n->debug_stats.tx_stats.batches += 1;
         n->debug_stats.tx_stats.packets += num_packets;
+        if (virtio_tx_interrupt_batching_enabled) {
+            n->debug_stats.tx_stats.signals += 1;
+        }
         qemu_mutex_unlock(&n->debug_stats_lock);
 
         if (virtio_tx_interrupt_batching_enabled) {

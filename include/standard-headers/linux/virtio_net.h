@@ -86,11 +86,13 @@
 struct virtio_debug_stats_rx {
 	uint64_t batches;
 	uint64_t packets;
+	uint64_t signals;
 } __attribute__((packed));
 
 struct virtio_debug_stats_tx {
 	uint64_t batches;
 	uint64_t packets;
+	uint64_t signals;
 } __attribute__((packed));
 
 struct virtio_debug_stats {
