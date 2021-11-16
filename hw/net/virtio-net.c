@@ -45,6 +45,10 @@
 #include "net_rx_pkt.h"
 #include "hw/virtio/vhost.h"
 
+#include "standard-headers/linux/vhost_types.h"
+#include "linux-headers/linux/vhost.h"
+#include <sys/ioctl.h>
+
 #define VIRTIO_NET_VM_VERSION    11
 
 #define MAC_TABLE_ENTRIES    64
@@ -147,9 +151,15 @@ static void virtio_net_get_config(VirtIODevice *vdev, uint8_t *config)
     virtio_stl_p(vdev, &netcfg.supported_hash_types,
                  VIRTIO_NET_RSS_SUPPORTED_HASHES);
 
+    struct vhost_net* vhost_net_state = get_vhost_net(nc->peer);
+    if (vhost_net_state && vhost_net_state->dev.vhost_ops->backend_type == VHOST_BACKEND_TYPE_KERNEL) {
+        int fd = (uintptr_t)vhost_net_state->dev.opaque;
+        ioctl(fd, VHOST_GET_DEBUG_STATS, &netcfg.debug_stats);
+    } else {
     qemu_mutex_lock(&n->debug_stats_lock);
     netcfg.debug_stats = n->debug_stats;
     qemu_mutex_unlock(&n->debug_stats_lock);
+    }
 
     memcpy(config, &netcfg, n->config_size);
 
